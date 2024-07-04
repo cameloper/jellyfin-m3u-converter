@@ -5,9 +5,8 @@ class MediaType(StrEnum):
     MOVIE = 'movie'
     SERIES = 'series'
 
-class Media(Object):
-    def __init__(self, media_type, duration, title, tvg_id, tvg_name, tvg_logo, tvg_group_title, tvg_country, tvg_language, tvg_type):
-        self.media_type = media_type
+class TVChannel(object):
+    def __init__(self, duration, title, url, tvg_id, tvg_name, tvg_logo, tvg_group_title, tvg_country, tvg_language, tvg_type):
         self.duration = duration
         self.title = title
         self.tvg_id = tvg_id
@@ -18,6 +17,27 @@ class Media(Object):
         self.tvg_language = tvg_language
         self.tvg_type = tvg_type
 
-class Playlist(Object):
+    def get_type(self):
+        return MediaType.TV
+
+class Movie(object):
+    def __init__(self, title, url):
+        self.title = title
+        self.url = url
+
+    def get_type(self):
+        return MediaType.MOVIE
+
+class Series(object):
+    def __init__(self, title, season, episode, url):
+        self.title = title
+        self.season = season
+        self.episode = episode
+        self.url = url
+
+    def get_type(self):
+        return MediaType.SERIES
+
+class Playlist(object):
     def __init__(self, media_entries):
         self.media_entries = media_entries
