@@ -2,6 +2,7 @@ from m3u_parser import M3uParser
 from playlist import *
 import sys
 import re
+import pycountry
 
 movie_regex = re.compile(r'/movie/')
 series_regex = re.compile(r'/series/')
@@ -31,10 +32,23 @@ def parse_entry(media):
         title = media["name"]
         return Series(title, 0, 0, media["url"])
     else:
-        return TVChannel(None,
-            media["name"],
+        return TVChannel(media["name"],
             media["url"],
-            None, None, None, None, None, None, None)
+            media["tvg"]["id"],
+            media["logo"],
+            media["category"],
+            parse_country(media["category"]))
+
+def parse_country(category):
+    if not category:
+        return None
+    cat_components = category.split(" | ")
+    if len(cat_components) < 2:
+        return None
+    else:
+        code = cat_components[0]
+        return pycountry.countries.get(alpha_2=code)
+    
 
 def main():
     if len(sys.argv) < 2:
