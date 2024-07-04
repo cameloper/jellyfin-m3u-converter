@@ -1,5 +1,6 @@
 from m3u_parser import M3uParser
 from playlist import *
+from pathlib import Path
 import sys
 import re
 import pycountry
@@ -72,12 +73,30 @@ def main():
     print("Number of total entries: {}".format(len(entries)))
 
     export_tv()
+    export_movies()
+    export_series()
     
 def export_tv():
-    path = export_dir + 'tv.m3u'
-    with open(path, 'w') as file:
+    file_path = Path(export_dir, 'tv.m3u').absolute()
+    with open(file_path, 'w') as file:
         for channel in tv:
             file.writelines(channel.get_extinf())
+
+def export_movies():
+    movies_dir = Path(export_dir, 'movies/')
+    movies_dir.mkdir(exist_ok=True)
+    for movie in movies:
+        file_path = Path(movies_dir, movie.title.replace('/', ' ') + '.strm').absolute()
+        with open(file_path, 'w') as file:
+            file.write(movie.url)
+
+def export_series():
+    series_dir = Path(export_dir, 'series/')
+    series_dir.mkdir(exist_ok=True)
+    for serie in series:
+        file_path = Path(series_dir, serie.title.replace('/', ' ') + '.strm').absolute()
+        with open(file_path, 'w') as file:
+            file.write(serie.url)
 
 if __name__ == "__main__":
     main()
