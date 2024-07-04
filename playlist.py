@@ -20,14 +20,18 @@ class TVChannel(object):
 
     def get_extinf(self):
         string = "#EXTINF:"
-        string += self.duration
+        string += "{}".format(self.duration)
 
-        string += 'tvg-id="{}"'.format(self.tvg_id)
-        string += 'tvg-name="{}"'.format(self.title)
-        string += 'tvg-logo="{}"'.format(self.tvg_logo)
-        string += 'tvg-country"{}"'.format(self.tvg_country)
-        string += 'group-title="{}"'.format(self.tvg_group_title)
+        string += ' tvg-id="{}"'.format(self.tvg_id)
+        string += ' tvg-name="{}"'.format(self.title)
+        string += ' tvg-logo="{}"'.format(self.tvg_logo)
+        string += ' tvg-country"{}"'.format(self.tvg_country.alpha_2 if self.tvg_country else None)
+        string += ' group-title="{}"'.format(self.tvg_group_title)
         string += ',{}'.format(self.title)
+
+        string += '\n{}\n'.format(self.url)
+
+        return string
 
 class Movie(object):
     def __init__(self, title, url):

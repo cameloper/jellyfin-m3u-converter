@@ -7,11 +7,13 @@ import pycountry
 movie_regex = re.compile(r'/movie/')
 series_regex = re.compile(r'/series/')
 
-def parse_entries(entries):
-    tv = list()
-    movies = list()
-    series = list()
+tv = list()
+movies = list()
+series = list()
 
+export_dir = "./"
+
+def parse_entries(entries):
     for entry in entries:
         media = parse_entry(entry)
         if not media:
@@ -64,9 +66,18 @@ def main():
     entries = parser.get_list()
     media_catalogs = parse_entries(entries)
 
-    count = len(entries)
-    print(count)
+    print("Parsed {} TV Channels, {} Movies and {} Series.".format(len(tv),
+                                                                    len(movies),
+                                                                    len(series)))
+    print("Number of total entries: {}".format(len(entries)))
 
+    export_tv()
+    
+def export_tv():
+    path = export_dir + 'tv.m3u'
+    with open(path, 'w') as file:
+        for channel in tv:
+            file.writelines(channel.get_extinf())
 
 if __name__ == "__main__":
     main()
