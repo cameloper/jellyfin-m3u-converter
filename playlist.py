@@ -18,6 +18,17 @@ class TVChannel(object):
     def get_type(self):
         return MediaType.TV
 
+    def get_extinf(self):
+        string = "#EXTINF:"
+        string += self.duration
+
+        string += 'tvg-id="{}"'.format(self.tvg_id)
+        string += 'tvg-name="{}"'.format(self.title)
+        string += 'tvg-logo="{}"'.format(self.tvg_logo)
+        string += 'tvg-country"{}"'.format(self.tvg_country)
+        string += 'group-title="{}"'.format(self.tvg_group_title)
+        string += ',{}'.format(self.title)
+
 class Movie(object):
     def __init__(self, title, url):
         self.title = title
