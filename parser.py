@@ -141,9 +141,8 @@ def export_series():
                 serie.season
             )
         )
-
         dir_path.mkdir(parents=True, exist_ok=True)
-        file_path = Path(series_dir, serie.title.replace('/', ' ') + '.strm').absolute()
+        file_path = Path(dir_path, serie.title + '.strm').absolute()
         with open(file_path, 'w') as file:
             file.write(serie.url)
 
