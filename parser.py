@@ -8,6 +8,7 @@ import pycountry
 movie_regex = re.compile(r'/movie/')
 series_regex = re.compile(r'/series/')
 episode_title_regex = re.compile(r'(?P<t>(?:\S+ )*\S+) S(?P<s>\d{2}) E(?P<e>\d{2})')
+multiple_whitespace_regex = re.compile(r'\s{2,}')
 
 tv = list()
 movies = list()
@@ -30,8 +31,11 @@ def parse_entries(entries):
     return [tv, movies, series]
 
 def parse_entry(media):
-    title = media["name"].replace('/', ' ')
-    group = media["category"]
+    title = media["name"].replace('/', ' ').strip()
+    title = multiple_whitespace_regex.sub(' ', title)
+    
+    group = media["category"].replace('/', ' - ').strip()
+    group = multiple_whitespace_regex.sub(' ', group)
     url = media["url"]
 
     category = ""
@@ -59,14 +63,15 @@ def parse_entry(media):
         info = parse_ep_title(title)
         return Series(info["title"], 
             country, 
-            category, 
+            category,
+            media["url"],
             info["season"], 
-            info["episode"], 
-            media["url"])
+            info["episode"])
     else:
         return TVChannel(title, 
             country, 
             category, 
+            url,
             media["tvg"]["id"],
             media["logo"])
 
@@ -122,7 +127,7 @@ def export_tv():
 def export_movies():
     for movie in movies:
         dir_path = Path(export_dir, 'movies/{}/{}/'.format(
-            movie.country,
+            movie.country.name if movie.country else "International/Other",
             movie.category
         ))
         dir_path.mkdir(parents=True, exist_ok=True)
@@ -135,14 +140,17 @@ def export_series():
         dir_path = Path(
             export_dir,
             'series/{}/{}/{}/Season {}'.format(
-                serie.country,
+                serie.country.name if serie.country else "International/Other",
                 serie.category,
                 serie.title,
                 serie.season
             )
         )
         dir_path.mkdir(parents=True, exist_ok=True)
-        file_path = Path(dir_path, serie.title + '.strm').absolute()
+        file_path = Path(dir_path, 'S{}E{}'.format(
+            serie.season,
+            serie.episode
+        ) + '.strm').absolute()
         with open(file_path, 'w') as file:
             file.write(serie.url)
 
