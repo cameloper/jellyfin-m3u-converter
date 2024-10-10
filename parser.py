@@ -7,6 +7,7 @@ import pycountry
 
 movie_regex = re.compile(r'/movie/')
 series_regex = re.compile(r'/series/')
+episode_title_regex = re.compile(r'(?P<t>(?:\S+ )*\S+) S(?P<s>\d{2}) E(?P<e>\d{2})')
 
 tv = list()
 movies = list()
@@ -29,29 +30,65 @@ def parse_entries(entries):
     return [tv, movies, series]
 
 def parse_entry(media):
-    if movie_regex.search(media["url"]):
-        return Movie(media["name"], media["url"])
-    elif series_regex.search(media["url"]):
-        title = media["name"]
-        return Series(title, 0, 0, media["url"])
-    else:
-        return TVChannel(media["name"],
-            media["url"],
-            media["tvg"]["id"],
-            media["logo"],
-            media["category"],
-            parse_country(media["category"]))
+    title = media["name"].replace('/', ' ')
+    group = media["category"]
+    url = media["url"]
 
-def parse_country(category):
-    if not category:
-        return None
-    cat_components = category.split(" | ")
+    category = ""
+    country = ""
+    
+    if not group:
+        print("Entry without group was found ({}). Choosing the default country and category.".format(title))
+        group = "XX | Other"
+
+    cat_components = group.split(" | ")
     if len(cat_components) < 2:
-        return None
+        country = pycountry.countries.get(alpha_2="XX")
+        category = group
     else:
         code = cat_components[0]
-        return pycountry.countries.get(alpha_2=code)
+        country = pycountry.countries.get(alpha_2=code)
+        category = cat_components[1]
+
+    if movie_regex.search(url):
+        return Movie(title, 
+            country, 
+            category, 
+            url)
+    elif series_regex.search(url):
+        info = parse_ep_title(title)
+        return Series(info["title"], 
+            country, 
+            category, 
+            info["season"], 
+            info["episode"], 
+            media["url"])
+    else:
+        return TVChannel(title, 
+            country, 
+            category, 
+            media["tvg"]["id"],
+            media["logo"])
+
+def parse_ep_title(ep_title):
+    match = episode_title_regex.search(ep_title)
     
+    if match:
+        title = match.group('t')
+        season = match.group('s')
+        episode = match.group('e')
+        
+        return {
+            'title': title,
+            'season': season,
+            'episode': episode
+        }
+    else:
+        return {
+            'title': ep_title,
+            'season': '01',
+            'episode': '01'
+        }
 
 def main():
     if len(sys.argv) < 2:
@@ -83,17 +120,29 @@ def export_tv():
             file.writelines(channel.get_extinf())
 
 def export_movies():
-    movies_dir = Path(export_dir, 'movies/')
-    movies_dir.mkdir(exist_ok=True)
     for movie in movies:
-        file_path = Path(movies_dir, movie.title.replace('/', ' ') + '.strm').absolute()
+        dir_path = Path(export_dir, 'movies/{}/{}/'.format(
+            movie.country,
+            movie.category
+        ))
+        dir_path.mkdir(parents=True, exist_ok=True)
+        file_path = Path(dir_path, movie.title + '.strm').absolute()
         with open(file_path, 'w') as file:
             file.write(movie.url)
 
 def export_series():
-    series_dir = Path(export_dir, 'series/')
-    series_dir.mkdir(exist_ok=True)
     for serie in series:
+        dir_path = Path(
+            export_dir,
+            'series/{}/{}/{}/Season {}'.format(
+                serie.country,
+                serie.category,
+                serie.title,
+                serie.season
+            )
+        )
+
+        dir_path.mkdir(parents=True, exist_ok=True)
         file_path = Path(series_dir, serie.title.replace('/', ' ') + '.strm').absolute()
         with open(file_path, 'w') as file:
             file.write(serie.url)

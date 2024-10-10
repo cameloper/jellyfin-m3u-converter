@@ -6,14 +6,14 @@ class MediaType(StrEnum):
     SERIES = 'series'
 
 class TVChannel(object):
-    def __init__(self, title, url, tvg_id, tvg_logo, tvg_group_title, tvg_country):
+    def __init__(self, title, tvg_country, tvg_group_title, url, tvg_id, tvg_logo):
         self.duration = -1
         self.title = title
+        self.tvg_country = tvg_country
+        self.tvg_group_title = tvg_group_title
         self.url = url
         self.tvg_id = tvg_id
         self.tvg_logo = tvg_logo
-        self.tvg_group_title = tvg_group_title
-        self.tvg_country = tvg_country
 
     def get_type(self):
         return MediaType.TV
@@ -34,19 +34,23 @@ class TVChannel(object):
         return string
 
 class Movie(object):
-    def __init__(self, title, url):
+    def __init__(self, title, country, category, url):
         self.title = title
+        self.country = country
+        self.category = category
         self.url = url
 
     def get_type(self):
         return MediaType.MOVIE
 
 class Series(object):
-    def __init__(self, title, season, episode, url):
+    def __init__(self, title, country, category, url, season, episode):
         self.title = title
+        self.country = country
+        self.category = category
+        self.url = url
         self.season = season
         self.episode = episode
-        self.url = url
 
     def get_type(self):
         return MediaType.SERIES
