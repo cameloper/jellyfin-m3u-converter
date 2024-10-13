@@ -3,9 +3,12 @@ from playlist import *
 from pathlib import Path
 import sys
 import re
+import json
 import tmdbsimple as tmdb
 import pycountry
 
+args_regex = re.compile(r'--(?P<k>(?:\w+)(?:-\w+)*)=(?P<v>[\w\/\.\~]+)')
+flags_regex = re.compile(r'--(?P<f>(?:\w+)(?:-\w+)*)')
 movie_regex = re.compile(r'/movie/')
 series_regex = re.compile(r'/series/')
 episode_title_regex = re.compile(r'(?P<t>(?:\S+ )*\S+) S(?P<s>\d{2}) E(?P<e>\d{2})')
@@ -18,7 +21,6 @@ series = list()
 
 export_dir = "./"
 
-tmdb.API_KEY = ""
 t_search = tmdb.Search()
 
 def parse_entries(entries, ttp):
@@ -26,7 +28,7 @@ def parse_entries(entries, ttp):
     j = len(entries)
     for entry in entries:
         i = i + 1
-        print("==[{}/{}]====================".format(i, j))
+        # print("==[{}/{}]====================".format(i, j))
         media = parse_entry(entry, ttp)
         if not media:
             continue
@@ -67,7 +69,7 @@ def parse_entry(media, ttp):
         if not ttp["movies"]:
             return None
         
-        id = parse_movie(title)
+        id = parse_movie(title, media['logo'])
         return Movie(title, 
             country, 
             category, 
@@ -92,23 +94,52 @@ def parse_entry(media, ttp):
             media["tvg"]["id"],
             media["logo"])
 
-def parse_movie(movie_title):
+def parse_movie(movie_title, imagePath):
     match = movie_title_regex.search(movie_title)
-
+    print("----------------------------")
     if match:
         title = match.group('t')
         year = match.group('d')
 
-        response = t_search.movie(query=title, year=year)
-        if len(t_search.results) < 1:
-            print('X Found no movie with title', movie_title)
-        elif len(t_search.results) > 1:
-            print('? Found multiple results for the movie with title', movie_title)
-            for t_r in t_search.results:
-                print(' ->', t_r['title'], t_r['release_date'], t_r['id'])
-        else:
-            print("Found movie with title", movie_title)
+        return search_movie(title, year, imagePath)
+    else:
+        return loose_search_movie(movie_title, imagePath)
 
+def search_movie(title, year, imagePath):
+    print("Searching for movie with title {} and year {}".format(title, year))
+    response = t_search.movie(query=title, year=year)
+    if len(t_search.results) < 1:
+        print("Not found! Trying without year!")
+        return loose_search_movie(title, imagePath)
+    else:
+        movie = verify_movies(t_search.results, imagePath)
+        if not movie:
+            return loose_search_movie(title, imagePath)
+        else:
+            return movie
+
+def loose_search_movie(title, image):
+    print("Searching for movie with title", title)
+    response = t_search.movie(query=title)
+    if len(t_search.results) < 1:
+        print("Not found! Giving up.")
+        return None
+    else:
+        movie = verify_movies(t_search.results, image)
+        return movie
+
+def verify_movies(options, imagePath):
+    print("Verifying correct movie from options using image")
+    for option in options:
+        images = tmdb.Movies(option['id']).images()
+        combined = images['backdrops'] + images['posters'] + images['logos']
+        for image in combined:
+            if image['file_path'] in imagePath:
+                print("Found movie with original title {} released at {}".format(option['original_title'], option['release_date']))
+                return option
+
+    print("Not found! Giving up.")
+    return None
 
 def parse_ep_title(ep_title):
     match = episode_title_regex.search(ep_title)
@@ -131,21 +162,41 @@ def parse_ep_title(ep_title):
         }
 
 def main():
-    if len(sys.argv) < 2:
-        sys.exit('No playlist url was given.')
+    args = dict()
+    flags = list()
+    for arg in sys.argv:
+        arg_match = args_regex.search(arg)
+        if arg_match:
+            args[arg_match.group('k')] = arg_match.group('v')
+        flag_match = flags_regex.search(arg)
+        if flag_match:
+            flags.append(flag_match.group('f'))
 
-    url = sys.argv[1]
-    print('Got URL from parameters: ')
-    print(url)
+    if not 'api-key' in args:
+        sys.exit('No API key was given.')
+    tmdb.API_KEY = args['api-key']
 
-    parser = M3uParser(timeout=30, useragent=None)
-    parser.parse_m3u(data_source=url, status_checker=None, check_live=False, enforce_schema=False)
+    if not 'm3u-path' in args and not 'json-path' in args:
+        sys.exit('Either m3u OR json file path must be given.')
+    elif not 'json-path' in args:
+        m3u_path = args['m3u-path']
+        print(m3u_path)
+        entries = parse_m3u(m3u_path)
+        if 'export-parsed-m3u' in args:
+            export_parsed_m3u(args['export-parsed-m3u'])
+    elif not 'm3u-path' in args:
+        entries = import_parsed_m3u(args['json-path'])
+    else:
+        sys.exit('Giving both m3u and json file paths is illegal.')
 
-    entries = parser.get_list()
+    if not flags:
+        print("No flags, won't convert any entries.")
+        return
+    
     media_catalogs = parse_entries(entries, {
-        "movies": True,
-        "series": False,
-        "tvchannels": False
+        "movies": "movies" in flags,
+        "series": "series" in flags,
+        "tvchannels": "tvchannels" in flags
     })
 
     print("Parsed {} TV Channels, {} Movies and {} Series.".format(len(tv),
@@ -153,12 +204,27 @@ def main():
                                                                     len(series)))
     print("Number of total entries: {}".format(len(entries)))
 
-    
-
     export_tv()
     export_movies()
     export_series()
+
+def parse_m3u(path):
+    parser = M3uParser(timeout=30, useragent=None)
+    parser.parse_m3u(data_source=path, status_checker=None, check_live=False, enforce_schema=False)
+
+    return parser.get_list()
+
+def import_parsed_m3u(file_path):
+    with open(file_path, 'r', encoding='utf8') as file:
+        data = json.load(file)
+
+    return data
     
+def export_parsed_m3u(entries):
+    file_path = Path(export_dir, 'parsed.json')
+    with open(file_path, 'w', encoding='utf8') as file:
+        json.dump(entries, file, indent=4, sort_keys=True, ensure_ascii=False)
+
 def export_tv():
     file_path = Path(export_dir, 'tv.m3u').absolute()
     with open(file_path, 'w') as file:
