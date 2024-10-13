@@ -1,4 +1,4 @@
-# Jellyfin M3U Converter
+# Kodi M3U Converter
 
 Basic script to parse m3u and seperate entries into:
 - Live TV
