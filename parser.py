@@ -3,11 +3,13 @@ from playlist import *
 from pathlib import Path
 import sys
 import re
+import tmdbsimple as tmdb
 import pycountry
 
 movie_regex = re.compile(r'/movie/')
 series_regex = re.compile(r'/series/')
 episode_title_regex = re.compile(r'(?P<t>(?:\S+ )*\S+) S(?P<s>\d{2}) E(?P<e>\d{2})')
+movie_title_regex = re.compile(r'(?P<t>.+?)(?: - )?\(?(?P<d>\d{4})\)?')
 multiple_whitespace_regex = re.compile(r'\s{2,}')
 
 tv = list()
@@ -16,9 +18,16 @@ series = list()
 
 export_dir = "./"
 
-def parse_entries(entries):
+tmdb.API_KEY = ""
+t_search = tmdb.Search()
+
+def parse_entries(entries, ttp):
+    i = 0
+    j = len(entries)
     for entry in entries:
-        media = parse_entry(entry)
+        i = i + 1
+        print("==[{}/{}]====================".format(i, j))
+        media = parse_entry(entry, ttp)
         if not media:
             continue
         elif media.get_type() == MediaType.TV:
@@ -30,7 +39,7 @@ def parse_entries(entries):
 
     return [tv, movies, series]
 
-def parse_entry(media):
+def parse_entry(media, ttp):
     title = media["name"].replace('/', ' ').strip()
     title = multiple_whitespace_regex.sub(' ', title)
     
@@ -55,11 +64,17 @@ def parse_entry(media):
         category = cat_components[1]
 
     if movie_regex.search(url):
+        if not ttp["movies"]:
+            return None
+        
+        id = parse_movie(title)
         return Movie(title, 
             country, 
             category, 
             url)
     elif series_regex.search(url):
+        if not ttp["series"]:
+            return None
         info = parse_ep_title(title)
         return Series(info["title"], 
             country, 
@@ -68,12 +83,32 @@ def parse_entry(media):
             info["season"], 
             info["episode"])
     else:
+        if not ttp["tvchannels"]:
+            return None
         return TVChannel(title, 
             country, 
-            category, 
+            group, 
             url,
             media["tvg"]["id"],
             media["logo"])
+
+def parse_movie(movie_title):
+    match = movie_title_regex.search(movie_title)
+
+    if match:
+        title = match.group('t')
+        year = match.group('d')
+
+        response = t_search.movie(query=title, year=year)
+        if len(t_search.results) < 1:
+            print('X Found no movie with title', movie_title)
+        elif len(t_search.results) > 1:
+            print('? Found multiple results for the movie with title', movie_title)
+            for t_r in t_search.results:
+                print(' ->', t_r['title'], t_r['release_date'], t_r['id'])
+        else:
+            print("Found movie with title", movie_title)
+
 
 def parse_ep_title(ep_title):
     match = episode_title_regex.search(ep_title)
@@ -107,12 +142,18 @@ def main():
     parser.parse_m3u(data_source=url, status_checker=None, check_live=False, enforce_schema=False)
 
     entries = parser.get_list()
-    media_catalogs = parse_entries(entries)
+    media_catalogs = parse_entries(entries, {
+        "movies": True,
+        "series": False,
+        "tvchannels": False
+    })
 
     print("Parsed {} TV Channels, {} Movies and {} Series.".format(len(tv),
                                                                     len(movies),
                                                                     len(series)))
     print("Number of total entries: {}".format(len(entries)))
+
+    
 
     export_tv()
     export_movies()
