@@ -1,6 +1,7 @@
 from m3u_parser import M3uParser
 from playlist import *
 from pathlib import Path
+import argparse
 import sys
 import re
 import json
@@ -19,7 +20,7 @@ tv = list()
 movies = list()
 series = list()
 
-export_dir = "./"
+export_dir = ""
 
 t_search = tmdb.Search()
 
@@ -162,41 +163,44 @@ def parse_ep_title(ep_title):
         }
 
 def main():
-    args = dict()
-    flags = list()
-    for arg in sys.argv:
-        arg_match = args_regex.search(arg)
-        if arg_match:
-            args[arg_match.group('k')] = arg_match.group('v')
-        flag_match = flags_regex.search(arg)
-        if flag_match:
-            flags.append(flag_match.group('f'))
+    arg_parser = argparse.ArgumentParser(
+        prog='Kodi M3U Converter',
+        description='Parses M3U file, searches for the media content on TMDB and saves the entries in files that are readable by Kodi media center (and Jellyfin)'
+    )
+    arg_parser.add_argument('input_file', type=Path, help='Path of the file to source data from. Type of this file is given with the --data-source argument.')
+    arg_parser.add_argument('-a', '--apikey', type=str, help='API key to use while connecting to TMDB. If no key is given, entry search will be skipped')
+    arg_parser.add_argument('-m', '--movies', dest='ttp', action='append_const', const='movies', help='Whether or not movies should be converted.')
+    arg_parser.add_argument('-s', '--series', dest='ttp', action='append_const', const='series', help='Whether or not series should be converted.')
+    arg_parser.add_argument('-c', '--channels', dest='ttp', action='append_const', const='channels', help='Whether or not TV channels should be converted.')
+    arg_parser.add_argument('-d', '--datasource', default='m3u', choices=['m3u', 'json'], help='The data source; Either a M3U file itself or the json file created from a dictionary containing parsed M3U entries.')
+    arg_parser.add_argument('-e', '--exportdir', type=Path, default="./", help='The export directory. Defaults to current directory.')
 
-    if not 'api-key' in args:
-        sys.exit('No API key was given.')
-    tmdb.API_KEY = args['api-key']
+    p = arg_parser.parse_args()
 
-    if not 'm3u-path' in args and not 'json-path' in args:
-        sys.exit('Either m3u OR json file path must be given.')
-    elif not 'json-path' in args:
-        m3u_path = args['m3u-path']
-        print(m3u_path)
+    tmdb.API_KEY = p.apikey
+    export_dir = p.exportdir
+
+    if p.datasource == 'm3u':
+        m3u_path = p.input_file
+        print('Data source: M3U file at', m3u_path)
         entries = parse_m3u(m3u_path)
-        if 'export-parsed-m3u' in args:
-            export_parsed_m3u(args['export-parsed-m3u'])
-    elif not 'm3u-path' in args:
-        entries = import_parsed_m3u(args['json-path'])
+        export_parsed_m3u(entries)
+    elif p.datasource == 'json':
+        json_path = p.input_file
+        print('Data source: JSON file at', json_path)
+        entries = import_parsed_m3u(m3u_path)
     else:
-        sys.exit('Giving both m3u and json file paths is illegal.')
+        print('Data source not defined:', p.datasource)
+        sys.exit()
 
-    if not flags:
+    if not p.ttp:
         print("No flags, won't convert any entries.")
         return
     
     media_catalogs = parse_entries(entries, {
-        "movies": "movies" in flags,
-        "series": "series" in flags,
-        "tvchannels": "tvchannels" in flags
+        "movies": "movies" in p.ttp,
+        "series": "series" in p.ttp,
+        "tvchannels": "tvchannels" in p.ttp
     })
 
     print("Parsed {} TV Channels, {} Movies and {} Series.".format(len(tv),
@@ -209,10 +213,10 @@ def main():
     export_series()
 
 def parse_m3u(path):
-    parser = M3uParser(timeout=30, useragent=None)
-    parser.parse_m3u(data_source=path, status_checker=None, check_live=False, enforce_schema=False)
+    m3u_parser = M3uParser(timeout=30, useragent=None)
+    m3u_parser.parse_m3u(data_source=path, status_checker=None, check_live=False, enforce_schema=False)
 
-    return parser.get_list()
+    return m3u_parser.get_list()
 
 def import_parsed_m3u(file_path):
     with open(file_path, 'r', encoding='utf8') as file:
